@@ -29,14 +29,3 @@ services:
       - key: TWILIO_PHONE
         sync: false
     healthCheckPath: /health
-
-  # Frontend Dashboard Service  
-  - type: web
-    name: careops-dashboard
-    env: static
-    repo: https://github.com/rajat7014/careops
-    buildCommand: cd dashboard && npm install && npm run build
-    staticPublishPath: ./dashboard/dist
-    envVars:
-      - key: NEXT_PUBLIC_API_URL
-        value: https://careops-api.onrender.com/api/v1
