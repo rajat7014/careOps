@@ -12,6 +12,7 @@ export function getRedis() {
     
     if (redisUrl) {
       // Use REDIS_URL when available (production environments like Render)
+      logger.info(`Attempting to connect to Redis using URL: ${redisUrl.replace(/:[^:@]+@/, ':***@')}`); // Mask password in logs
       redisClient = new Redis(redisUrl, {
         maxRetriesPerRequest: null,
         retryStrategy: (times) => {
@@ -21,6 +22,8 @@ export function getRedis() {
         enableReadyCheck: true,
         lazyConnect: true, // Don't connect immediately
         connectTimeout: 5000,
+        // Additional options that might help with Render's Redis
+        family: 4, // Force IPv4
       });
     } else {
       // Use individual config for development
