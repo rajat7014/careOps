@@ -1,0 +1,10 @@
+node_modules/
+.env
+.env.local
+*.log
+dist/
+coverage/
+.DS_Store
+.idea/
+.vscode/
+prisma/migrations/**/migration_lock.toml

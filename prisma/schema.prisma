@@ -1,0 +1,347 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+//////////////////////////////////////////////////////
+// ENUMS
+//////////////////////////////////////////////////////
+
+enum Role {
+  OWNER
+  STAFF
+}
+
+enum BookingStatus {
+  CONFIRMED
+  COMPLETED
+  NO_SHOW
+}
+
+enum FormStatus {
+  PENDING
+  COMPLETED
+  OVERDUE
+}
+
+enum AlertStatus {
+  ACTIVE
+  RESOLVED
+}
+
+enum IntegrationLogStatus {
+  PENDING
+  SENT
+  FAILED
+  RETRYING
+}
+
+enum Channel {
+  EMAIL
+  SMS
+}
+
+//////////////////////////////////////////////////////
+// WORKSPACE (Multi-Tenant Root)
+//////////////////////////////////////////////////////
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  timezone  String
+  isActive  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users           WorkspaceUser[]
+  contacts        Contact[]
+  bookings        Booking[]
+  bookingTypes    BookingType[]
+  inventory       InventoryItem[]
+  inventoryLogs   InventoryLog[]
+  alerts          Alert[]
+  integrations    Integration[]
+  integrationLogs IntegrationLog[]
+  availability    Availability[]
+}
+
+//////////////////////////////////////////////////////
+// USERS
+//////////////////////////////////////////////////////
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workspaceUsers WorkspaceUser[]
+}
+
+model WorkspaceUser {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        Role     @default(STAFF)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([userId])
+}
+
+//////////////////////////////////////////////////////
+// CONTACT + INBOX
+//////////////////////////////////////////////////////
+
+model Contact {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  email       String?
+  phone       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+  bookings      Booking[]
+
+  @@index([workspaceId])
+}
+
+model Conversation {
+  id          String   @id @default(cuid())
+  workspaceId String
+  contactId   String
+  createdAt   DateTime @default(now())
+
+  contact  Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([workspaceId])
+  @@index([contactId])
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  channel        Channel
+  sender         String
+  content        String
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+}
+
+//////////////////////////////////////////////////////
+// BOOKINGS
+//////////////////////////////////////////////////////
+
+model BookingType {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  duration    Int
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  bookings  Booking[]
+  forms     Form[]
+
+  @@index([workspaceId])
+}
+
+model Booking {
+  id            String        @id @default(cuid())
+  workspaceId   String
+  contactId     String
+  bookingTypeId String
+  status        BookingStatus @default(CONFIRMED)
+  scheduledAt   DateTime
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact     Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  bookingType BookingType        @relation(fields: [bookingTypeId], references: [id])
+
+  formSubmissions  FormSubmission[]
+  inventoryUsages  BookingInventory[]
+
+  @@index([workspaceId])
+  @@index([scheduledAt])
+}
+
+model BookingInventory {
+  id        String @id @default(cuid())
+  bookingId String
+  itemId    String
+  quantity  Int
+
+  booking Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  item    InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([bookingId, itemId])
+  @@index([bookingId])
+  @@index([itemId])
+}
+
+//////////////////////////////////////////////////////
+// FORMS
+//////////////////////////////////////////////////////
+
+model Form {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  bookingTypeId String
+  name          String
+  createdAt     DateTime @default(now())
+
+  bookingType BookingType      @relation(fields: [bookingTypeId], references: [id])
+  submissions FormSubmission[]
+
+  @@index([workspaceId])
+}
+
+model FormSubmission {
+  id        String     @id @default(cuid())
+  bookingId String
+  formId    String
+  status    FormStatus @default(PENDING)
+  createdAt DateTime   @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  form    Form    @relation(fields: [formId], references: [id])
+
+  @@index([bookingId])
+}
+
+//////////////////////////////////////////////////////
+// INVENTORY
+//////////////////////////////////////////////////////
+
+model InventoryItem {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  quantity    Int
+  threshold   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  logs      InventoryLog[]
+  bookings  BookingInventory[]
+
+  @@index([workspaceId])
+}
+
+model InventoryLog {
+  id        String   @id @default(cuid())
+  itemId    String
+  workspaceId String
+  change    Int      // Positive for add, negative for deduct
+  reason    String   // e.g., "booking_created", "manual_adjustment"
+  bookingId String?
+  createdAt DateTime @default(now())
+
+  item      InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([itemId])
+  @@index([workspaceId])
+}
+
+//////////////////////////////////////////////////////
+// ALERTS
+//////////////////////////////////////////////////////
+
+model Alert {
+  id          String      @id @default(cuid())
+  workspaceId String
+  type        String
+  message     String
+  status      AlertStatus @default(ACTIVE)
+  createdAt   DateTime    @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+//////////////////////////////////////////////////////
+// INTEGRATIONS
+//////////////////////////////////////////////////////
+
+model Integration {
+  id          String   @id @default(cuid())
+  workspaceId String
+  type        String   // EMAIL, SMS
+  provider    String   // sendgrid, twilio, etc.
+  config      String   // JSON string of config
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  logs      IntegrationLog[]
+
+  @@unique([workspaceId, type])
+  @@index([workspaceId])
+}
+
+model IntegrationLog {
+  id            String               @id @default(cuid())
+  workspaceId   String
+  integrationId String
+  type          String               // EMAIL, SMS
+  provider      String
+  to            String
+  subject       String?
+  content       String
+  status        IntegrationLogStatus @default(PENDING)
+  error         String?
+  retryCount    Int                  @default(0)
+  sentAt        DateTime?
+  createdAt     DateTime             @default(now())
+
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  integration Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([integrationId])
+  @@index([status])
+}
+
+//////////////////////////////////////////////////////
+// AVAILABILITY
+//////////////////////////////////////////////////////
+
+model Availability {
+  id          String   @id @default(cuid())
+  workspaceId String
+  dayOfWeek   Int      // 0-6 (Sunday-Saturday)
+  startTime   String   // HH:mm format
+  endTime     String   // HH:mm format
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
