@@ -31,11 +31,12 @@ services:
     healthCheckPath: /health
 
   # Frontend Dashboard Service  
-  - type: static
+  - type: web
     name: careops-dashboard
+    env: static
     repo: https://github.com/rajat7014/careops
     buildCommand: cd dashboard && npm install && npm run build
-    publishPath: ./dashboard/dist
+    staticPublishPath: ./dashboard/dist
     envVars:
       - key: NEXT_PUBLIC_API_URL
         value: https://careops-api.onrender.com/api/v1
