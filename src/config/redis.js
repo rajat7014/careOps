@@ -7,20 +7,38 @@ let redisAvailable = false;
 
 export function getRedis() {
   if (!redisClient) {
-    redisClient = new Redis({
-      host: config.redis.host,
-      port: config.redis.port,
-      password: config.redis.password || undefined,
-      db: config.redis.db,
-      maxRetriesPerRequest: null,
-      retryStrategy: (times) => {
-        const delay = Math.min(times * 50, 2000);
-        return delay;
-      },
-      enableReadyCheck: true,
-      lazyConnect: true, // Don't connect immediately
-      connectTimeout: 5000,
-    });
+    // Use REDIS_URL for production (like on Render) or individual config for dev
+    const redisUrl = process.env.REDIS_URL;
+    
+    if (redisUrl) {
+      // Use REDIS_URL when available (production environments like Render)
+      redisClient = new Redis(redisUrl, {
+        maxRetriesPerRequest: null,
+        retryStrategy: (times) => {
+          const delay = Math.min(times * 50, 2000);
+          return delay;
+        },
+        enableReadyCheck: true,
+        lazyConnect: true, // Don't connect immediately
+        connectTimeout: 5000,
+      });
+    } else {
+      // Use individual config for development
+      redisClient = new Redis({
+        host: config.redis.host,
+        port: config.redis.port,
+        password: config.redis.password || undefined,
+        db: config.redis.db,
+        maxRetriesPerRequest: null,
+        retryStrategy: (times) => {
+          const delay = Math.min(times * 50, 2000);
+          return delay;
+        },
+        enableReadyCheck: true,
+        lazyConnect: true, // Don't connect immediately
+        connectTimeout: 5000,
+      });
+    }
 
     redisClient.on('connect', () => {
       logger.info('Redis connecting...');
